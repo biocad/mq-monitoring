@@ -1,0 +1,43 @@
+{
+  "build":{
+    "deps":[]
+  },
+  "deploy":{
+      "monique":{
+        "scheduler-in" : {
+            "host": "localhost",
+            "comport": 9000,
+            "techport": 9024
+        },
+        "scheduler-out" : {
+            "host": "localhost",
+            "comport": 9001,
+            "techport": 9025
+        }
+      },
+      "mongo": {
+        "host": "localhost",
+        "port": 27017,
+        "user": "monique",
+        "password": "monique",
+        "databases": {
+                "mq-monitoring": "monique",
+                "mq-monitoring-handler": "monique"
+            }
+      }
+  },
+  "params":{
+      "mq_monitoring": {
+          "creator": "0000-0000-0000-000000000000",
+          "logfile": "/tmp/mq_monitoring.log",
+          "frequency": 60000,
+          "controller": {
+              "host": "",
+              "port": ""
+          }
+      },
+      "mq_monitoring_handler": {
+        "port": 3000
+      }
+  }
+}
