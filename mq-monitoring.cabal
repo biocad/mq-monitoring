@@ -1,0 +1,64 @@
+name:                mq-monitoring
+version:             0.1.0.0
+synopsis:            Library for monitoring of monique components
+description:         Library for monitoring of monique components
+homepage:            https://github.com/biocad/mq-monitoring
+license:             BSD3
+license-file:        LICENSE
+author:              Bogdan Neterebskii, Vladimir Morozov, Alexander Sadovnikov
+maintainer:          neterebskiy@biocad.ru
+copyright:           (c) 2018, BIOCAD
+category:            System
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     System.MQ.Monitoring
+  other-modules:       
+  build-depends:       base >= 4.7 && < 5
+                     , aeson
+                     , aeson-casing
+                     , db-mongo-wrapper
+                     , mq
+                     , mq-component-hs
+                     , mongoDB
+                     , mtl
+                     , text
+                     , unbounded-delays
+  ghc-options:         -Wall -O2
+  default-language:    Haskell2010
+  
+executable mq-monitoring-handler
+  hs-source-dirs:      app
+  main-is:             Handler.hs
+  build-depends:       base
+                     , aeson-picker
+                     , bcd-config
+                     , bson
+                     , containers
+                     , db-mongo-wrapper
+                     , mq
+                     , mq-monitoring
+                     , mongoDB
+                     , scotty
+                     , text
+                     , web-template
+  default-language:    Haskell2010
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -Wall -O2
+
+executable mq-monitoring
+  hs-source-dirs:      app
+  main-is:             Component.hs
+  build-depends:       base
+                     , mq-component-hs
+                     , mq-monitoring
+  default-language:    Haskell2010
+  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -Wall -O2
+
+
+
+source-repository head
+  type:     git
+  location: https://github.com/biocad/mq-monitoring
