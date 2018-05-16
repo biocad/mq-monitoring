@@ -6,7 +6,9 @@ import           Control.Monad.IO.Class       (liftIO)
 import           Data.Aeson.Picker            ((|-?))
 import           Data.Bson                    (Document, (=:))
 import           Data.Either                  (rights)
-import qualified Data.Map.Strict              as M (fromList, (!?))
+import           Data.Function                (on)
+import           Data.List                    (groupBy, sortOn)
+import qualified Data.Map.Strict              as M (fromList, keys, (!?))
 import           Data.Maybe                   (fromMaybe)
 import           Data.Text.Lazy               (Text, toStrict, unpack)
 import           Database.MongoDB.WrapperNew  (MongoPool, decode, find,
@@ -15,7 +17,7 @@ import           System.BCD.Config            (getConfigText)
 import           System.MQ.Monad              (runMQMonad)
 import           System.MQ.Monitoring         (monitoringColl)
 import           System.MQ.Protocol           (Timestamp, getTimeMillis)
-import           System.MQ.Protocol.Technical (MonitoringData)
+import           System.MQ.Protocol.Technical (MonitoringData (..))
 import           Web.Scotty.Trans             (get, json, params)
 import           Web.Template                 (CustomWebServer (..),
                                                Process (..), Route (..),
@@ -39,7 +41,10 @@ handlerMonitoring = Process $ do
   paramMap <- fmap M.fromList params
 
   messages <- liftIO $ handleReq pool (paramMap M.!? "name") (paramMap M.!? "since")
-  json messages
+
+  if "last" `elem` M.keys paramMap
+    then json $ lastMessages messages
+    else json messages
 
   where
     handleReq :: MongoPool -> Maybe Text -> Maybe Text -> IO [MonitoringData]
@@ -57,6 +62,9 @@ handlerMonitoring = Process $ do
         let sinceQuery = pure ("sync_time" =: ["$gte" =: since])
 
         return (specQuery ++ sinceQuery)
+
+    lastMessages :: [MonitoringData] -> [MonitoringData]
+    lastMessages = fmap (head . reverse . sortOn mSyncTime) . groupBy ((==) `on` mName) . sortOn mName
 
     oneDay :: Timestamp
     oneDay = 86400000
