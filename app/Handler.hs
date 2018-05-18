@@ -1,8 +1,13 @@
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 
 module Main where
 
 import           Control.Monad.IO.Class       (liftIO)
+import           Data.Aeson                   (FromJSON (..), ToJSON (..),
+                                               genericParseJSON, object, (.=))
+import           Data.Aeson.Casing            (aesonPrefix, snakeCase)
 import           Data.Aeson.Picker            ((|-?))
 import           Data.Bson                    (Document, (=:))
 import           Data.Either                  (rights)
@@ -13,6 +18,7 @@ import           Data.Maybe                   (fromMaybe)
 import           Data.Text.Lazy               (Text, toStrict, unpack)
 import           Database.MongoDB.WrapperNew  (MongoPool, decode, find,
                                                loadMongoPool, withMongoPool)
+import           GHC.Generics                 (Generic)
 import           System.BCD.Config            (getConfigText)
 import           System.MQ.Monad              (runMQMonad)
 import           System.MQ.Monitoring         (monitoringColl)
@@ -47,10 +53,11 @@ handlerMonitoring = Process $ do
     else json messages
 
   where
-    handleReq :: MongoPool -> Maybe Text -> Maybe Text -> IO [MonitoringData]
+    handleReq :: MongoPool -> Maybe Text -> Maybe Text -> IO [MoniUserData]
     handleReq pool specM sinceM = do
         query <- formQuery specM sinceM
-        fmap (rights . fmap decode) . withMongoPool pool $ find 0 monitoringColl query
+        mData <- fmap (rights . fmap decode) . withMongoPool pool $ find 0 monitoringColl query
+        return $ toUser <$> mData
 
     formQuery :: Maybe Text -> Maybe Text -> IO Document
     formQuery specM sinceM = do
@@ -61,10 +68,31 @@ handlerMonitoring = Process $ do
         let since = maybe (curTime - oneDay) (read . unpack) sinceM
         let sinceQuery = pure ("sync_time" =: ["$gte" =: since])
 
-        return (specQuery ++ sinceQuery)
+        return $ specQuery ++ sinceQuery
 
-    lastMessages :: [MonitoringData] -> [MonitoringData]
-    lastMessages = fmap (head . reverse . sortOn mSyncTime) . groupBy ((==) `on` mName) . sortOn mName
+    lastMessages :: [MoniUserData] -> [MoniUserData]
+    lastMessages = fmap (head . reverse . sortOn muSyncTime) . groupBy ((==) `on` muName) . sortOn muName
 
     oneDay :: Timestamp
     oneDay = 86400000
+
+-- | Format in which data is returned to user.
+--
+data MoniUserData = MoniUserData { muSyncTime :: Timestamp
+                                 , muName     :: String
+                                 , muIsAlive  :: Bool
+                                 , muMessage  :: String
+                                 }
+ deriving (Eq, Show, Generic)
+
+instance ToJSON MoniUserData where
+ toJSON MoniUserData{..} = object $ [ "sync_time" .= muSyncTime
+                                    , "name" .= muName
+                                    , "is_alive" .= muIsAlive
+                                    ] ++ if null muMessage then [] else [ "message" .= muMessage ]
+
+instance FromJSON MoniUserData where
+ parseJSON = genericParseJSON $ aesonPrefix snakeCase
+
+toUser :: MonitoringData -> MoniUserData
+toUser MonitoringData{..} = MoniUserData mSyncTime mName mIsAlive mMessage
