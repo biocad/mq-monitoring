@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.1.1.1] - 2018-05-21
+### Changed
+- New error type
+
+## [0.1.1.0] - 2018-05-18
+### Changed
+- Don't return empty messages
+
+## [0.1.0.2] - 2018-05-16
+### Added
+- 'last' parameter to handler
+
+## [0.1.0.1] - 2018-05-15
+### Changed
+- Hot fix
+
 ## [0.1.0.0] - 2018-04-06
 ### Added
 - Initial version
