@@ -1,5 +1,5 @@
 name:                mq-monitoring
-version:             0.1.1.1
+version:             0.1.1.2
 synopsis:            Library for monitoring of monique components
 description:         Library for monitoring of monique components
 homepage:            https://github.com/biocad/mq-monitoring
@@ -16,10 +16,11 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      src
   exposed-modules:     System.MQ.Monitoring
-  other-modules:       
+  other-modules:       System.MQ.Monitoring.Internal.Types
   build-depends:       base >= 4.7 && < 5
                      , aeson
                      , aeson-casing
+                     , bytestring
                      , db-mongo-wrapper
                      , mq
                      , mq-component-hs
@@ -35,7 +36,6 @@ executable mq-monitoring-handler
   main-is:             Handler.hs
   build-depends:       base
                      , aeson
-                     , aeson-casing
                      , aeson-picker
                      , bcd-config
                      , bson
