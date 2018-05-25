@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.1.1.3] - 2018-05-25
+### Changed
+- Version up due to `mq` library update.
+
+## [0.1.1.2] - 2018-05-23
+### Added
+- Error handler for `MQError`s.
+
 ## [0.1.1.1] - 2018-05-21
 ### Changed
 - New error type
