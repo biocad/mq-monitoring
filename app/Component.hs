@@ -2,9 +2,8 @@
 
 module Main where
 
-import           System.MQ.Component  (runAppWithTech)
-import           System.MQ.Monitoring (monitoringActionComm,
-                                       monitoringActionTech)
+import           System.MQ.Component  (runApp)
+import           System.MQ.Monitoring (monitoringActionComm)
 
 main :: IO ()
-main = runAppWithTech "mq_monitoring" monitoringActionComm monitoringActionTech
+main = runApp "mq_monitoring" monitoringActionComm
