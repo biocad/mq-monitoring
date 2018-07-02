@@ -9,9 +9,9 @@ import           Data.Aeson                  (FromJSON (..), ToJSON (..))
 import           Data.Aeson.Picker           ((|-?))
 import           Data.Bson                   (Document, (=:))
 import           Data.Either                 (rights)
-import           Data.Function               (on)
-import           Data.List                   (groupBy, sortOn)
-import qualified Data.Map.Strict             as M (fromList, keys, (!?))
+import           Data.Map.Strict             (Map)
+import qualified Data.Map.Strict             as M (adjust, fromList, insert,
+                                                   keys, toList, (!?))
 import           Data.Maybe                  (fromMaybe)
 import qualified Data.Text                   as T (Text)
 import           Data.Text.Lazy              (Text, toStrict, unpack)
@@ -69,7 +69,7 @@ runHandler Handler{..} = Process $ do
     handleReq :: MongoPool -> Maybe Text -> Maybe Text -> IO [a]
     handleReq pool specM sinceM = do
         query <- formQuery specM sinceM
-        mData <- fmap (rights . fmap decode) . withMongoPool pool $ find 0 collName query
+        mData <- fmap (rights . fmap decode) . withMongoPool pool $ (find 0 collName query)
         return mData
 
     formQuery :: Maybe Text -> Maybe Text -> IO Document
@@ -81,14 +81,27 @@ runHandler Handler{..} = Process $ do
         let since = maybe (curTime - oneDay) (read . unpack) sinceM
         let sinceQuery = pure ("sync_time" =: ["$gte" =: since])
 
-        return $ specQuery ++ sinceQuery
+        return $ ["$query" =: specQuery ++ sinceQuery, "$orderby" =: ["sync_time" =: (-1 :: Int)]]
 
     lastMessages :: [b] -> [b]
     lastMessages mData = res
       where
-        groupedData = groupBy ((==) `on` name) . sortOn name $ mData
+        groupedData = groupOnName mData
 
-        res = fmap (head . reverse . sortOn time) groupedData
+        res = fmap last groupedData
+
+    groupOnName :: [b] -> [[b]]
+    groupOnName = fmap snd . M.toList . group mempty
+
+    group :: Map String [b] -> [b] -> Map String [b]
+    group resMap []       = resMap
+    group resMap (x : xs) = group newMap xs
+      where
+        curKeys = M.keys resMap
+
+        nameX  = name x
+        newMap = if nameX `elem` curKeys then M.adjust ((:) x) nameX resMap
+                 else M.insert nameX [x] resMap
 
     oneDay :: Timestamp
     oneDay = 86400000

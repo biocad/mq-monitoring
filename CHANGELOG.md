@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.1.1.4] - 2018-07-02
+### Changed
+- Sorting is performed in db.
+
 ## [0.1.1.3] - 2018-05-25
 ### Changed
 - Version up due to `mq` library update.
