@@ -1,5 +1,5 @@
 name:                mq-monitoring
-version:             0.1.1.3
+version:             0.1.2.0
 synopsis:            Library for monitoring of monique components
 description:         Library for monitoring of monique components
 homepage:            https://github.com/biocad/mq-monitoring
@@ -20,35 +20,17 @@ library
   build-depends:       base >= 4.7 && < 5
                      , aeson
                      , aeson-casing
-                     , bytestring
-                     , db-mongo-wrapper
-                     , mq
-                     , mq-component-hs
-                     , mongoDB
-                     , mtl
-                     , text
-                     , unbounded-delays
-  ghc-options:         -Wall -O2
-  default-language:    Haskell2010
-  
-executable mq-monitoring-handler
-  hs-source-dirs:      app
-  main-is:             Handler.hs
-  build-depends:       base
-                     , aeson
                      , aeson-picker
                      , bcd-config
-                     , bson
+                     , bytestring
                      , containers
-                     , db-mongo-wrapper
                      , mq
-                     , mq-monitoring
-                     , mongoDB
+                     , mq-component-hs
                      , scotty
                      , text
                      , web-template
+  ghc-options:         -Wall -O2
   default-language:    Haskell2010
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -Wall -O2
 
 executable mq-monitoring
   hs-source-dirs:      app

@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.1.2.0] - 2018-07-03
+### Changed
+- Now component stores most recent monitoring messages in cache and returns them in response to GET request.
+
 ## [0.1.1.3] - 2018-05-25
 ### Changed
 - Version up due to `mq` library update.

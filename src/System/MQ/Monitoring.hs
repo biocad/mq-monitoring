@@ -2,109 +2,101 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE ViewPatterns      #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module System.MQ.Monitoring
-  ( ErrorDBUnit (..)
-  , MoniUserData (..)
-  , errorsColl
+  ( MoniUserData (..)
   , monitoringActionComm
-  , monitoringActionTech
-  , monitoringColl
   , toUser
   ) where
 
 import           Control.Concurrent                  (forkIO)
+import           Control.Concurrent.MVar             (MVar, modifyMVar_,
+                                                      newMVar, tryReadMVar)
 import           Control.Monad                       (when)
-import           Control.Monad.Except                (catchError, liftIO)
-import           Data.Aeson                          (ToJSON)
+import           Control.Monad.IO.Class              (liftIO)
+import           Data.Aeson.Picker                   ((|-?))
+import           Data.Map.Strict                     (Map)
+import qualified Data.Map.Strict                     as M (elems, insert)
+import           Data.Maybe                          (fromMaybe)
 import           Data.String                         (fromString)
-import           Data.Text                           (Text)
-import           Database.MongoDB                    (insert_)
-import           Database.MongoDB.WrapperNew         (MongoPool, encode,
-                                                      loadMongoPool,
-                                                      withMongoPool)
+import           System.BCD.Config                   (getConfigText)
 import           System.MQ.Component                 (Env (..),
                                                       TwoChannels (..),
-                                                      load2Channels,
-                                                      loadTechChannels, runTech)
-import           System.MQ.Error                     (MQError (..))
-import           System.MQ.Monad                     (MQMonad, errorHandler,
-                                                      foreverSafe, runMQMonad)
-import           System.MQ.Monitoring.Internal.Types (ErrorDBUnit (..),
-                                                      MoniUserData (..), toUser)
-import           System.MQ.Protocol                  (Condition (..), Creator,
+                                                      loadTechChannels)
+import           System.MQ.Monad                     (MQMonad, foreverSafe)
+import           System.MQ.Monitoring.Internal.Types (MoniUserData (..), toUser)
+import           System.MQ.Protocol                  (Condition (..),
                                                       Message (..),
                                                       MessageLike (..),
-                                                      MessageTag,
-                                                      MessageType (..),
-                                                      Props (..), matches,
-                                                      messageCreator,
-                                                      messageSpec, messageType)
+                                                      MessageTag, Props (..),
+                                                      matches, messageSpec,
+                                                      messageType)
 import           System.MQ.Protocol.Technical        (MonitoringData)
 import           System.MQ.Transport                 (sub)
+import           Web.Scotty.Trans                    (get, json, params)
+import           Web.Template                        (CustomWebServer (..),
+                                                      Process (..), Route (..),
+                                                      runWebServer)
 
--- | Name of collection where monitoring data is stored
+-- | Alias for 'Map' from name of component to most recent montitoring
+-- message from that component.
 --
-monitoringColl :: Text
-monitoringColl = "monitoring"
+type MonitoringCache = Map String MoniUserData
 
--- | Name of collection where error data is stored
---
-errorsColl :: Text
-errorsColl = "errors"
-
--- | Action for communication level that performs monitoring of Monique
+-- | Action that listens to monitoring messages, stores them in cache and launches
+-- its own server to process GET requests for these monitoring messages.
 --
 monitoringActionComm :: Env -> MQMonad ()
 monitoringActionComm Env{..} = do
-    TwoChannels{..} <- load2Channels
-    pool <- liftIO $ loadMongoPool "mq-monitoring"
-
-    foreverSafe name $ do
-      (tag, msg) <- sub fromScheduler
-
-      when (filterTag tag) $ processErrorData pool (messageCreator tag) msg
-
-  where
-    Props{..} = props :: Props MQError
-
-    filterTag :: MessageTag -> Bool
-    filterTag = (`matches` (messageType :== mtype :&& messageSpec :== fromString spec))
-
-    processErrorData :: MongoPool -> Creator -> Message -> MQMonad ()
-    processErrorData pool mCreator Message{..} = do
-        MQError{..} <- unpackM msgData
-        storeDataInDB pool errorsColl $ ErrorDBUnit errorCode errorMessage msgCreatedAt mCreator
-
--- | Action for techincal level that performs monitoring of Monique
---
-monitoringActionTech :: Env -> MQMonad ()
-monitoringActionTech env@Env{..} = do
-    _ <- liftIO $ forkIO $ catchMQ $ listenerTech env
-    runTech env
-  where
-    catchMQ :: MQMonad () -> IO ()
-    catchMQ = runMQMonad . (`catchError` errorHandler name)
-
-listenerTech :: Env -> MQMonad ()
-listenerTech Env{..} = do
     TwoChannels{..} <- loadTechChannels
-    pool <- liftIO $ loadMongoPool "mq-monitoring"
+    cache <- liftIO $ newMVar mempty
+
+    _ <- liftIO $ forkIO $ runServer cache
 
     foreverSafe name $ do
       (tag, msg) <- sub fromScheduler
-
-      when (filterTag tag) $ processMoniData pool msg
+      when (filterTag tag) $ processMoniData cache msg
 
   where
     Props{..} = props :: Props MonitoringData
 
     filterTag :: MessageTag -> Bool
-    filterTag = (`matches` ((messageType :== mtype :&& messageSpec :== fromString spec) :|| messageType :== Error))
+    filterTag = (`matches` (messageType :== mtype :&& messageSpec :== fromString spec))
 
-    processMoniData :: MongoPool -> Message -> MQMonad ()
-    processMoniData pool Message{..} = (unpackM msgData :: MQMonad MonitoringData) >>= storeDataInDB pool monitoringColl
+    processMoniData :: MVar MonitoringCache -> Message -> MQMonad ()
+    processMoniData cache Message{..} = (unpackM msgData :: MQMonad MonitoringData) >>= storeDataInCache cache
 
-storeDataInDB :: ToJSON a => MongoPool -> Text -> a -> MQMonad ()
-storeDataInDB pool collName = liftIO . withMongoPool pool . insert_ collName . encode
+storeDataInCache :: MVar MonitoringCache -> MonitoringData -> MQMonad ()
+storeDataInCache cache = liftIO . modifyMVar_ cache . updateCache
+  where
+    updateCache :: MonitoringData -> MonitoringCache -> IO MonitoringCache
+    updateCache (toUser -> muData@MoniUserData{..}) = return . M.insert muName muData
+
+-- | Server that receives commands with flag 'last' and sends list of most recent
+-- monitoring messages in response.
+--
+runServer :: MVar MonitoringCache -> IO ()
+runServer cache = do
+    port <- portIO
+    runWebServer port monitoringServer
+
+  where
+    monitoringServer = CustomWebServer () [Route get 1 "/monitoring" $ runHandler cache]
+
+    portIO :: IO Int
+    portIO = do
+        config <- getConfigText
+        return $ fromMaybe 3000 $ config |-? ["params", "mq_monitoring_handler", "port"]
+
+    runHandler :: MVar MonitoringCache -> Process ()
+    runHandler cache = Process $ do
+        params' <- params
+        when ("last" `elem` fmap fst params') $ do
+            messages <- liftIO $ maybe [] M.elems <$> tryReadMVar cache
+            json messages
+
+
+
+

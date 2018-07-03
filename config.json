@@ -14,16 +14,6 @@
             "comport": 9001,
             "techport": 9025
         }
-      },
-      "mongo": {
-        "host": "localhost",
-        "port": 27017,
-        "user": "monique",
-        "password": "monique",
-        "databases": {
-                "mq-monitoring": "monique",
-                "mq-monitoring-handler": "monique"
-            }
       }
   },
   "params":{
