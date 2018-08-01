@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 {-# LANGUAGE ViewPatterns      #-}
@@ -37,7 +35,9 @@ import           System.MQ.Protocol.Technical        (MonitoringData)
 import           System.MQ.Transport                 (sub)
 import           Web.Scotty.Trans                    (get, json, params)
 import           Web.Template                        (CustomWebServer (..),
-                                                      Process (..), Route (..),
+                                                      Process (..), ProcessR,
+                                                      Route (..),
+                                                      defaultHandleLog,
                                                       runWebServer)
 
 -- | Alias for 'Map' from name of component to most recent montitoring
@@ -83,20 +83,16 @@ runServer cache = do
     runWebServer port monitoringServer
 
   where
-    monitoringServer = CustomWebServer () [Route get 1 "/monitoring" $ runHandler cache]
+    monitoringServer = CustomWebServer () () () defaultHandleLog [Route get 1 "/monitoring" $ runHandler cache]
 
     portIO :: IO Int
     portIO = do
         config <- getConfigText
         return $ fromMaybe 3000 $ config |-? ["params", "mq_monitoring_handler", "port"]
 
-    runHandler :: MVar MonitoringCache -> Process ()
-    runHandler cache = Process $ do
+    runHandler :: MVar MonitoringCache -> ProcessR ()
+    runHandler cache' = Process $ do
         params' <- params
         when ("last" `elem` fmap fst params') $ do
-            messages <- liftIO $ maybe [] M.elems <$> tryReadMVar cache
+            messages <- liftIO $ maybe [] M.elems <$> tryReadMVar cache'
             json messages
-
-
-
-
