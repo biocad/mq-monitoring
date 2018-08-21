@@ -18,7 +18,6 @@ import           Data.Aeson.Picker                   ((|-?))
 import           Data.Map.Strict                     (Map)
 import qualified Data.Map.Strict                     as M (elems, insert)
 import           Data.Maybe                          (fromMaybe)
-import           Data.String                         (fromString)
 import           System.BCD.Config                   (getConfigText)
 import           System.MQ.Component                 (Env (..),
                                                       TwoChannels (..),
@@ -32,7 +31,7 @@ import           System.MQ.Protocol                  (Condition (..),
                                                       matches, messageSpec,
                                                       messageType)
 import           System.MQ.Protocol.Technical        (MonitoringData)
-import           System.MQ.Transport                 (sub)
+import           System.MQ.Transport                 (Subscribe (..), sub)
 import           Web.Scotty.Trans                    (get, json, params)
 import           Web.Template                        (CustomWebServer (..),
                                                       Process (..), ProcessR,
@@ -51,6 +50,9 @@ type MonitoringCache = Map String MoniUserData
 monitoringActionComm :: Env -> MQMonad ()
 monitoringActionComm Env{..} = do
     TwoChannels{..} <- loadTechChannels
+
+    subscribeToTypeSpec fromScheduler mtype spec
+
     cache <- liftIO $ newMVar mempty
 
     _ <- liftIO $ forkIO $ runServer cache
@@ -63,7 +65,7 @@ monitoringActionComm Env{..} = do
     Props{..} = props :: Props MonitoringData
 
     filterTag :: MessageTag -> Bool
-    filterTag = (`matches` (messageType :== mtype :&& messageSpec :== fromString spec))
+    filterTag = (`matches` (messageType :== mtype :&& messageSpec :== spec))
 
     processMoniData :: MVar MonitoringCache -> Message -> MQMonad ()
     processMoniData cache Message{..} = (unpackM msgData :: MQMonad MonitoringData) >>= storeDataInCache cache
