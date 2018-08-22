@@ -1,5 +1,5 @@
 name:                mq-monitoring
-version:             0.1.2.1
+version:             0.1.2.2
 synopsis:            Library for monitoring of monique components
 description:         Library for monitoring of monique components
 homepage:            https://github.com/biocad/mq-monitoring
